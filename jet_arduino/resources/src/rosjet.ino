@@ -4,7 +4,7 @@
 #include <std_msgs/String.h>
 #include <std_msgs/Empty.h>
 #include <std_msgs/Int16.h>
-#include <std_msgs/UInt64.h>
+#include <std_msgs/Int64.h>
 #include <geometry_msgs/Twist.h>
 #include "Wire.h"
 
@@ -27,9 +27,20 @@
 //Encoder Constants
 #define ENCODER_INTERVAL 20
 
+#define encoder_pin_left_interrupt 5
+#define encoder_pin_right_interrupt 4
+
+#define encoder_pin_left_A 18
+#define encoder_pin_right_A 19
+#define encoder_pin_left_B 20
+#define encoder_pin_right_B 21
+
 //Accel/Gyro Constants
 #define MPU_ADDR 0x68
 #define MPU_INTERVAL 50
+
+//RC Constant
+#define CHANNEL_NUM 6
 
 /*
  * GLOBAL VARIABLES
@@ -72,8 +83,8 @@ unsigned long motorTimer;
 ros::NodeHandle  nh;
 
 //Encoders
-unsigned long encoderTimer;
-std_msgs::UInt64 encoder_left_value, encoder_right_value;
+signed long encoderTimer;
+std_msgs::Int64 encoder_left_value, encoder_right_value;
 ros::Publisher encoder_left_pub("arduino/encoder_left_value", &encoder_left_value);
 ros::Publisher encoder_right_pub("arduino/encoder_right_value", &encoder_right_value);
 
@@ -85,20 +96,45 @@ geometry_msgs::Twist gyro;
 ros::Publisher accel_pub("arduino/accel", &accel);
 ros::Publisher gyro_pub("arduino/gyro", &gyro);
 
+//RC Reciever
+
+short ch1; //Throttle
+short ch2; //Ailerons
+short ch3; //Elevation
+short ch4; //Rudder
+short ch5; //Gear
+short ch6; //Auxillary 1
+
+uint8_t currentChannel = 0;
+
+short m1Speed;
+short m2Speed;
+
+std_msgs::Int16 rc_channel[CHANNEL_NUM];
+
+ros::Publisher rc_channel_pub[CHANNEL_NUM] = {
+  ros::Publisher("arduino/rc_channel_1", &rc_channel[0]),
+  ros::Publisher("arduino/rc_channel_2", &rc_channel[1]),
+  ros::Publisher("arduino/rc_channel_3", &rc_channel[2]),
+  ros::Publisher("arduino/rc_channel_4", &rc_channel[3]),
+  ros::Publisher("arduino/rc_channel_5", &rc_channel[4]),
+  ros::Publisher("arduino/rc_channel_6", &rc_channel[5])
+};
+
 /*
  * CALLBACKS
  */
 void motor_right_speed_cb(const std_msgs::Int16 &cmd_msg) {
     motorTimer = millis();
-    md.setM2Speed(cmd_msg.data);
-    if (cmd_msg.data == 0)
+    md.setM2Speed(m2Speed);
+    if (m2Speed == 0)
       md.setM2Brake(BRAKE_POWER);
 }
 
 void motor_left_speed_cb(const std_msgs::Int16 &cmd_msg) {
     motorTimer = millis();
-    md.setM1Speed(cmd_msg.data);
-    if (cmd_msg.data == 0)
+    md.setM1Speed(m1Speed);
+    if (m1Speed == 0)
       md.setM1Brake(BRAKE_POWER);
 }
 
@@ -108,12 +144,43 @@ void echoCheck() { // If ping received, set the sensor distance to array.
 }
 
 void encoder_left_cb() {
-  encoder_left_value.data++;
+  if(digitalRead(encoder_pin_left_B) == HIGH) {
+    if(digitalRead(encoder_pin_left_A) == LOW) {
+      encoder_left_value.data--;
+    }
+    else{
+    encoder_left_value.data++;
+    }
+  }
+  else{
+    if(digitalRead(encoder_pin_right_A) == LOW){
+      encoder_left_value.data++;
+    }
+    else{
+      encoder_left_value.data--;
+    }
+  }  
 }
 
 void encoder_right_cb() {
-  encoder_right_value.data++;
+  if(digitalRead(encoder_pin_right_A) == HIGH) {
+    if(digitalRead(encoder_pin_right_B) == LOW) {
+      encoder_right_value.data--;
+    }
+    else{
+    encoder_right_value.data++;
+    }
+  }
+  else{
+    if(digitalRead(encoder_pin_right_B) == LOW){
+      encoder_right_value.data++;
+    }
+    else{
+      encoder_right_value.data--;
+    }
+  }  
 }
+
 
 void setup() {
   md.init();
@@ -129,6 +196,17 @@ void setup() {
 
   nh.advertise(encoder_left_pub);
   nh.advertise(encoder_right_pub);
+  
+  for(uint8_t i = 0; i < CHANNEL_NUM; i++) {
+    nh.advertise(rc_channel_pub[i]);
+  }
+  
+  pinMode(52, INPUT); //RC ch1
+  pinMode(50, INPUT); //RC ch2
+  pinMode(48, INPUT); //RC ch3
+  pinMode(46, INPUT); //RC ch4
+  pinMode(44, INPUT); //RC ch5
+  pinMode(42, INPUT); //RC ch6
 
   for(uint8_t i = 0; i < SONAR_NUM; i++) {
     nh.advertise(sonar_pub[i]);
@@ -145,17 +223,49 @@ void setup() {
     pingTimer[i] = pingTimer[i - 1] + PING_INTERVAL;
 
   mpuTimer = millis() + 800;
-
-  attachInterrupt(5, encoder_left_cb, RISING); //digital pin 18
-  attachInterrupt(4, encoder_right_cb, RISING); //digital pin 19
-
+  
+  pinMode(encoder_pin_left_A, INPUT);
+  digitalWrite(encoder_pin_left_A, LOW);
+  
+  pinMode(encoder_pin_right_A, INPUT);
+  digitalWrite(encoder_pin_right_A, LOW);
+  
+  pinMode(encoder_pin_left_B, INPUT);
+  digitalWrite(encoder_pin_left_B, LOW);
+  
+  pinMode(encoder_pin_right_B, INPUT);
+  digitalWrite(encoder_pin_right_B, LOW);
+  
+  attachInterrupt(encoder_pin_left_interrupt, encoder_left_cb, RISING); //digital pin 18, //5
+  attachInterrupt(encoder_pin_right_interrupt, encoder_right_cb, RISING); //digital pin 19, //4
+  
   encoder_left_value.data = 0;
   encoder_right_value.data = 0;
+  
 
 }
 
 void loop() {
-
+  
+  ch1 = pulseIn(52, HIGH);
+  ch3 = pulseIn(48, HIGH);
+  m1Speed = map(ch1,1200,1900,-100,150);
+  m2Speed = map(ch3,1000,1900,-100,150);
+  m1Speed=m1Speed/20*20;
+  m2Speed=m2Speed/20*20;
+  
+  if ((-20 < m1Speed) && (m1Speed < 20)) {
+    m1Speed = 0; }
+  if ((-20 < m2Speed) && (m2Speed < 20)) {
+    m2Speed = 0; }
+    
+  
+  for (uint8_t i = 0; i < CHANNEL_NUM; i++) { // Loop through all the channels
+    rc_channel_pub[i].publish(&rc_channel[i]);
+    rc_channel[0].data=ch1;
+    rc_channel[2].data=ch3;
+  }
+       
   for (uint8_t i = 0; i < SONAR_NUM; i++) { // Loop through all the sensors
     if (millis() >= pingTimer[i]) {         // Is it this sensor's time to ping?
       pingTimer[i] += PING_INTERVAL * SONAR_NUM;  // Set next time this sensor will be pinged.
