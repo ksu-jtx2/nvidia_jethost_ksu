@@ -121,22 +121,49 @@ ros::Publisher rc_channel_pub[CHANNEL_NUM] = {
   ros::Publisher("arduino/rc_channel_6", &rc_channel[5])
 };
 
+//Set speed publisher
+std_msgs::Int64 speed_left, speed_right;
+ros::Publisher speed_left_pub("/arduino/speed_left", &speed_left);
+ros::Publisher speed_right_pub("/arduino/speed_right", &speed_right);
+
+
 /*
  * CALLBACKS
  */
+
 void motor_right_speed_cb(const std_msgs::Int16 &cmd_msg) {
     motorTimer = millis();
     md.setM2Speed(m2Speed);
-    if (m2Speed == 0)
+    //md.setM2Speed(cmd_msg.data);
+    if ((m2Speed == 0) && (cmd_msg.data == 0))
       md.setM2Brake(BRAKE_POWER);
+    
+    
 }
 
 void motor_left_speed_cb(const std_msgs::Int16 &cmd_msg) {
     motorTimer = millis();
     md.setM1Speed(m1Speed);
-    if (m1Speed == 0)
+    //md.setM1Speed(cmd_msg.data);
+    if ((m1Speed == 0) && (cmd_msg.data == 0))
       md.setM1Brake(BRAKE_POWER);
 }
+
+/*
+void motor_right_speed_cb(const std_msgs::Int16 &cmd_msg) {
+    motorTimer = millis();
+    md.setM2Speed(cmd_msg.data);
+    if (cmd_msg.data == 0)
+      md.setM2Brake(BRAKE_POWER);
+}
+
+void motor_left_speed_cb(const std_msgs::Int16 &cmd_msg) {
+    motorTimer = millis();
+    md.setM1Speed(cmd_msg.data);
+    if (cmd_msg.data == 0)
+      md.setM1Brake(BRAKE_POWER);
+}
+*/
 
 void echoCheck() { // If ping received, set the sensor distance to array.
   if (sonar[currentSensor].check_timer())
@@ -197,6 +224,9 @@ void setup() {
   nh.advertise(encoder_left_pub);
   nh.advertise(encoder_right_pub);
   
+  nh.advertise(speed_left_pub);
+  nh.advertise(speed_right_pub);
+  
   for(uint8_t i = 0; i < CHANNEL_NUM; i++) {
     nh.advertise(rc_channel_pub[i]);
   }
@@ -246,19 +276,28 @@ void setup() {
 }
 
 void loop() {
-  
+  //int x;
+  //int theta;
   ch1 = pulseIn(52, HIGH);
   ch3 = pulseIn(48, HIGH);
-  m1Speed = map(ch1,1200,1900,-100,150);
-  m2Speed = map(ch3,1000,1900,-100,150);
-  m1Speed=m1Speed/20*20;
-  m2Speed=m2Speed/20*20;
-  
-  if ((-20 < m1Speed) && (m1Speed < 20)) {
-    m1Speed = 0; }
-  if ((-20 < m2Speed) && (m2Speed < 20)) {
-    m2Speed = 0; }
-    
+  ch3 = ch3;
+  m1Speed = map(ch1,1100,1900,-75,100);
+  m2Speed = map(ch3,1100,1800,-90,105);
+  m1Speed = m1Speed-8;
+  //vector.linear.x=map(ch1,1200,1900,-.5,.5);
+  //vector.angular.z=map(ch3,1200,1900,-.5,.5);
+  //x=map(ch1,1200,1900,-10,15);
+  //theta=map(ch1,1200,1900,-10,15);
+  //vector.linear.x=x/20*20;
+  //vector.angular.z=theta/20*20;
+  //m1Speed=m1Speed/40*40;
+  //m2Speed=(m2Speed/40*40);
+  speed_left.data=m1Speed;
+  speed_right.data=m2Speed;
+  speed_left_pub.publish(&speed_left);
+  speed_right_pub.publish(&speed_right);
+
+     
   
   for (uint8_t i = 0; i < CHANNEL_NUM; i++) { // Loop through all the channels
     rc_channel_pub[i].publish(&rc_channel[i]);
