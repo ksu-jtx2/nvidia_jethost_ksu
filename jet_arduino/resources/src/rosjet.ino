@@ -281,8 +281,8 @@ void loop() {
   ch1 = pulseIn(52, HIGH);
   ch3 = pulseIn(48, HIGH);
   ch3 = ch3;
-  m1Speed = map(ch1,1100,1900,-75,100);
-  m2Speed = map(ch3,1100,1800,-90,105);
+  m1Speed = map(ch1,1100,1900,-85,110);
+  m2Speed = map(ch3,1100,1800,-90,80);
   m1Speed = m1Speed-8;
   //vector.linear.x=map(ch1,1200,1900,-.5,.5);
   //vector.angular.z=map(ch3,1200,1900,-.5,.5);
@@ -292,8 +292,8 @@ void loop() {
   //vector.angular.z=theta/20*20;
   //m1Speed=m1Speed/40*40;
   //m2Speed=(m2Speed/40*40);
-  speed_left.data=m1Speed;
-  speed_right.data=m2Speed;
+  speed_left.data=m1Speed/5*5;
+  speed_right.data=m2Speed/5*5;
   speed_left_pub.publish(&speed_left);
   speed_right_pub.publish(&speed_right);
 
