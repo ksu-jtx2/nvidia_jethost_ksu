@@ -129,28 +129,23 @@ void setup() {
 
 void loop() {
   // put your main code here, to run repeatedly:
-  
-  for (int i=-400; i<=400; i++){
-    speed_left_pub.publish(&speed_left);
-    speed_right_pub.publish(&speed_right);
-      if (millis() >= currentTimer) {
-    motor_right_current.data = md.getM2CurrentMilliamps();
-    motor_left_current.data = md.getM1CurrentMilliamps();
-
-    motor_right_current_pub.publish(&motor_right_current);
-    motor_left_current_pub.publish(&motor_left_current);
-    currentTimer += CURRENT_INTERVAL;}
-
-  if (millis() >= encoderTimer) {
-    encoder_left_pub.publish(&encoder_left_value);
-    encoder_right_pub.publish(&encoder_right_value);
-    encoderTimer += ENCODER_INTERVAL;}
-
-  if (millis() > motorTimer + MOTOR_TIMEOUT_MS) {
-    md.setM1Brake(BRAKE_POWER);
-    md.setM2Brake(BRAKE_POWER);}
-    
-  delay(10);
+  uint16_msg.data = 0;
+  servoL.publish( &uint16_msg );
   nh.spinOnce();
-}
+  for (int i = 90; i <= 401; i++){
+    uint16_msg.data = i;
+    if (i == 401)
+      uint16_msg.data = 0;
+    servoL.publish( &uint16_msg );
+    nh.spinOnce();
+    delay(1000);
+    nh.spinOnce();
+    uint16_msg.data = (wheelSpeeds[1] - leftEncOld); // (CurrentEncoderValue - oldValue)
+    leftEncOld = wheelSpeeds[1];
+    linear.publish( &uint16_msg );
+    nh.spinOnce();
+    delay(250);
+  }
+  delay(50000);
+
 }
